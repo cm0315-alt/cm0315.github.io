@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>응원 왜곡 카메라</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        #ui { position: absolute; bottom: 30px; width: 100%; text-align: center; z-index: 10; }
+        .btn { background: #ff3e3e; color: white; border: none; padding: 15px 30px; border-radius: 50px; font-size: 16px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="ui"><button class="btn">화면을 캡처해 공유하세요!</button></div>
+    <script>
+        let scene, camera, renderer, video, texture, mesh;
+
+        async function init() {
+            video = document.createElement('video');
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            video.srcObject = stream;
+            video.play();
+
+            scene = new THREE.Scene();
+            camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            texture = new THREE.VideoTexture(video);
+            const material = new THREE.ShaderMaterial({
+                uniforms: { tDiffuse: { value: texture }, strength: { value: 3.0 } },
+                vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position, 1.0); }`,
+                fragmentShader: `
+                    uniform sampler2D tDiffuse; uniform float strength; varying vec2 vUv;
+                    void main() {
+                        vec2 uv = vUv - 0.5;
+                        float dist = length(uv);
+                        float angle = atan(uv.y, uv.x) + dist * strength;
+                        uv = vec2(cos(angle), sin(angle)) * dist + 0.5;
+                        gl_FragColor = texture2D(tDiffuse, uv);
+                    }`
+            });
+            mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+            scene.add(mesh);
+            animate();
+        }
+        function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
+        init();
+    </script>
+</body>
+</html>
