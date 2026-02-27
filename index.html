@@ -1,36 +1,43 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>응원 왜곡 카메라</title>
+    <title>응원 챌린지 카메라</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; }
-        #ui { position: absolute; bottom: 30px; width: 100%; text-align: center; z-index: 10; }
-        .btn { background: #ff3e3e; color: white; border: none; padding: 15px 30px; border-radius: 50px; font-size: 16px; font-weight: bold; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #ui { position: absolute; bottom: 30px; width: 100%; text-align: center; z-index: 10; display: flex; justify-content: center; gap: 10px; }
+        .btn { background: #ff3e3e; color: white; border: none; padding: 15px 25px; border-radius: 50px; font-size: 15px; font-weight: bold; cursor: pointer; }
+        .recording { background: #333 !important; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        #status { position: absolute; top: 20px; width: 100%; text-align: center; color: white; z-index: 10; font-weight: bold; text-shadow: 0 0 5px #000; }
     </style>
 </head>
 <body>
-    <div id="ui"><button class="btn">화면을 캡처해 공유하세요!</button></div>
+    <div id="status">나선형 왜곡 카메라</div>
+    <div id="ui">
+        <button id="recBtn" class="btn" onclick="toggleRecording()">녹화 시작</button>
+    </div>
     <script>
-        let scene, camera, renderer, video, texture, mesh;
+        let scene, camera, renderer, video, texture, mesh, stream;
+        let mediaRecorder, chunks = [];
 
         async function init() {
             video = document.createElement('video');
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: true });
             video.srcObject = stream;
             video.play();
 
             scene = new THREE.Scene();
             camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-            renderer = new THREE.WebGLRenderer();
+            renderer = new THREE.WebGLRenderer({ preserveDrawingBuffer: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
             texture = new THREE.VideoTexture(video);
             const material = new THREE.ShaderMaterial({
-                uniforms: { tDiffuse: { value: texture }, strength: { value: 3.0 } },
+                uniforms: { tDiffuse: { value: texture }, strength: { value: 3.5 } },
                 vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position, 1.0); }`,
                 fragmentShader: `
                     uniform sampler2D tDiffuse; uniform float strength; varying vec2 vUv;
@@ -46,7 +53,33 @@
             scene.add(mesh);
             animate();
         }
+
         function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
+
+        function toggleRecording() {
+            const btn = document.getElementById('recBtn');
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                mediaRecorder.stop();
+                btn.innerText = "녹화 시작";
+                btn.classList.remove('recording');
+            } else {
+                chunks = [];
+                const canvasStream = renderer.domElement.captureStream(30);
+                mediaRecorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm' });
+                mediaRecorder.ondataavailable = e => chunks.push(e.data);
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/mp4' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'distortion_video.mp4';
+                    a.click();
+                };
+                mediaRecorder.start();
+                btn.innerText = "녹화 중... (클릭 시 종료)";
+                btn.classList.add('recording');
+            }
+        }
         init();
     </script>
 </body>
